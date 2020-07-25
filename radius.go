@@ -10,19 +10,22 @@ import (
 
 	"layeh.com/radius"
 	"layeh.com/radius/rfc2865"
+
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
 
 // RadiusServer runs the RADIUS server
 type RadiusServer struct {
 	Addr string
 	Port uint16
-	DB   *macdatabase
+	DB   *gorm.DB
 
 	server *radius.PacketServer
 }
 
 // NewRadiusServer creates a new instance of RadiusServer
-func NewRadiusServer(db *macdatabase) RadiusServer {
+func NewRadiusServer(db *gorm.DB) RadiusServer {
 	radiusserver := RadiusServer{}
 	radiusserver.Port = 1812
 	radiusserver.DB = db
@@ -83,18 +86,23 @@ func (rs *RadiusServer) radiusHandler(w radius.ResponseWriter, r *radius.Request
 	case !validFormat:
 		log.Println("RADIUS: Invalid MAC address format received")
 	default:
-		if record, err := rs.DB.GetMACRecord(mac); err != nil {
-			// TODO: Pull allowed SSIDs for NULL group id
-			log.Println("Did not find record of", mac, err)
-		} else {
-
-			// Verify the SSID is allowed
-			for _, ssid := range record.ssid {
-				if ssid.ssid == requestedSSID {
-					code = radius.CodeAccessAccept
+		var record MACAddress
+		rs.DB.Preload("DeviceGroups").Preload("DeviceGroups.Networks").First(&record, "MAC = ?", mac)
+		if record.ID > 0 {
+			// Verify the requested SSID is allowed
+			for _, group := range record.DeviceGroups {
+				for _, network := range group.Networks {
+					if network.SSID == requestedSSID {
+						code = radius.CodeAccessAccept
+					}
 				}
 			}
+			log.Println("RADIUS: Found:", record.MAC)
+		} else {
+			// TODO: Pull allowed SSIDs for NULL group id
+			log.Println("RADIUS: Not found:", mac)
 		}
+
 		log.Printf("RADIUS: %v received %v for %v", mac, code, requestedSSID)
 	}
 

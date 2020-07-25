@@ -6,14 +6,21 @@ import (
 
 	"os"
 	"syscall"
+
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
 
 func main() {
 	// Open the database
-	db := &macdatabase{}
-	db.Open("./data.db")
+	db, err := gorm.Open("sqlite3", "data.db")
+	if err != nil {
+		panic("Unable to create or open database")
+	}
 	defer db.Close()
 
+	// Migrate the schema
+	db.AutoMigrate(&MACAddress{}, &DeviceGroup{}, &Network{}, &Client{})
 	// WaitGroup to track when our routines finish
 	var wait sync.WaitGroup
 
