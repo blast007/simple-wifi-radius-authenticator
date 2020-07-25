@@ -18,7 +18,6 @@ import (
 // RadiusServer runs the RADIUS server
 type RadiusServer struct {
 	Addr string
-	Port uint16
 	DB   *gorm.DB
 
 	server *radius.PacketServer
@@ -27,7 +26,7 @@ type RadiusServer struct {
 // NewRadiusServer creates a new instance of RadiusServer
 func NewRadiusServer(db *gorm.DB) RadiusServer {
 	radiusserver := RadiusServer{}
-	radiusserver.Port = 1812
+	radiusserver.Addr = ":1812"
 	radiusserver.DB = db
 	return radiusserver
 }
@@ -38,7 +37,7 @@ func (rs *RadiusServer) Start(wait *sync.WaitGroup) {
 	rs.server = &radius.PacketServer{
 		Handler:      radius.HandlerFunc(rs.radiusHandler),
 		SecretSource: radius.StaticSecretSource([]byte(`secret`)),
-		Addr:         fmt.Sprintf("%v:%v", rs.Addr, rs.Port),
+		Addr:         rs.Addr,
 	}
 
 	go func(rs *RadiusServer, wait *sync.WaitGroup) {
