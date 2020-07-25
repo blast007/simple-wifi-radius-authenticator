@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
-	"regexp"
 	"strings"
 	"sync"
 
@@ -64,26 +62,25 @@ func (rs *RadiusServer) radiusHandler(w radius.ResponseWriter, r *radius.Request
 	calledStationID := rfc2865.CalledStationID_GetString(r.Packet)
 	// TODO: Use the password for something. Some WiFi controllers will pass the MAC address again while others may use a shared password for all devices.
 	//password := rfc2865.UserPassword_GetString(r.Packet)
-	stripDelimiters := strings.NewReplacer(":", "", "-", "", ".", "")
 
 	// Default to rejecting the request
 	code := radius.CodeAccessReject
 
 	// Convert username lowercase and remove delimiters
-	mac := stripDelimiters.Replace(strings.ToLower(username))
-
-	// Verify the value looks like a MAC address
-	validFormat, _ := regexp.MatchString(`^[0-9a-f]{12}$`, mac)
+	mac := normalizeMACAddress(username)
 
 	// Parse the SSID out of the Called-Station-Id
 	csiParts := strings.Split(calledStationID, ":")
 	requestedSSID := csiParts[len(csiParts)-1]
 
 	switch {
+	// Must be a wireless port type
 	case nasPortType != rfc2865.NASPortType_Value_Wireless80211 && nasPortType != rfc2865.NASPortType_Value_WirelessOther:
 		log.Println("RADIUS: Invalid NAS-Port-Type (must be wireless)")
-	case !validFormat:
+	// Verify the value looks like a MAC address
+	case !isValidMACFormat(mac):
 		log.Println("RADIUS: Invalid MAC address format received")
+	// Look up the record
 	default:
 		var record MACAddress
 		rs.DB.Preload("DeviceGroups").Preload("DeviceGroups.Networks").First(&record, "MAC = ?", mac)
