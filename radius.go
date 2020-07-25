@@ -93,13 +93,13 @@ func (rs *RadiusServer) radiusHandler(w radius.ResponseWriter, r *radius.Request
 					}
 				}
 			}
-			log.Println("RADIUS: Found:", device.MAC)
+			log.Println("RADIUS: Found:", prettyPrintMACAddress(device.MAC))
 		} else {
 			// TODO: Pull allowed SSIDs for NULL group id
-			log.Println("RADIUS: Not found:", mac)
+			log.Println("RADIUS: Not found:", prettyPrintMACAddress(mac))
 		}
 
-		log.Printf("RADIUS: %v received %v for %v", mac, code, requestedSSID)
+		log.Printf("RADIUS: %v received %v for %v", prettyPrintMACAddress(mac), code, requestedSSID)
 	}
 
 	w.Write(r.Response(code))
