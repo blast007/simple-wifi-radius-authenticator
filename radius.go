@@ -82,18 +82,18 @@ func (rs *RadiusServer) radiusHandler(w radius.ResponseWriter, r *radius.Request
 		log.Println("RADIUS: Invalid MAC address format received")
 	// Look up the record
 	default:
-		var record MACAddress
-		rs.DB.Preload("DeviceGroups").Preload("DeviceGroups.Networks").First(&record, "MAC = ?", mac)
-		if record.ID > 0 {
+		var device Device
+		rs.DB.Preload("DeviceGroups").Preload("DeviceGroups.Networks").First(&device, "MAC = ?", mac)
+		if device.ID > 0 {
 			// Verify the requested SSID is allowed
-			for _, group := range record.DeviceGroups {
+			for _, group := range device.DeviceGroups {
 				for _, network := range group.Networks {
 					if network.SSID == requestedSSID {
 						code = radius.CodeAccessAccept
 					}
 				}
 			}
-			log.Println("RADIUS: Found:", record.MAC)
+			log.Println("RADIUS: Found:", device.MAC)
 		} else {
 			// TODO: Pull allowed SSIDs for NULL group id
 			log.Println("RADIUS: Not found:", mac)

@@ -20,7 +20,7 @@ func main() {
 	defer db.Close()
 
 	// Migrate the schema
-	db.AutoMigrate(&MACAddress{}, &DeviceGroup{}, &Network{}, &Client{})
+	db.AutoMigrate(&Device{}, &DeviceGroup{}, &Network{}, &Client{})
 	// WaitGroup to track when our routines finish
 	var wait sync.WaitGroup
 

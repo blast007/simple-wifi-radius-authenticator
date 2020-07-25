@@ -5,11 +5,11 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
 
-// MACAddress stores the MAC addresses and is associated with zero or more device groups
-type MACAddress struct {
+// Device stores the MAC addresses and is associated with zero or more device groups
+type Device struct {
 	gorm.Model
 	MAC          string        `gorm:"unique;not null"`
-	DeviceGroups []DeviceGroup `gorm:"many2many:macaddress_devicegroups;"`
+	DeviceGroups []DeviceGroup `gorm:"many2many:device_devicegroups;"`
 }
 
 // DeviceGroup store the groups a device can belong to and is associated with zero or more networks
