@@ -1,0 +1,108 @@
+{{ define "body" }}
+      <div class="container-fluid">
+        <div class="row">
+          <div class="col-lg-12 col-xl-6">
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">Devices</h3>
+              </div>
+              <div class="card-body p-0">
+                <table class="table table-striped">
+                  <thead>
+                    <tr>
+                      <th style="width: 100px">MAC Address</th>
+                      <th>Groups</th>
+                      <th style="width: 40px">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {{ $groups := .Groups }}
+                    {{ range $device := .Devices }}
+                    <tr>
+                      <td>{{ prettyPrintMACAddress $device.MAC }}</td>
+                      <td>
+                        <form role="form" action="/devices/update" method="POST">
+                          <select class="select2 devicegroups" multiple="multiple" data-placeholder="Select one or more groups" style="width: 100%;" name="devicegroups[]">
+                            {{ range $group := $groups }}
+                            {{ if deviceContainsGroup $device $group }}
+                            <option value="{{$group.ID}}" selected>{{ $group.Name }}</option>
+                            {{ else }}
+                            <option value="{{$group.ID}}">{{ $group.Name }}</option>
+                            {{ end }}
+                            {{ end }}
+                          </select><input type="hidden" name="id" value="{{ $device.ID }}" /><noscript><button type="submit">Save</button></noscript>
+                        </form>
+                      </td>
+                      <td>
+                        <form role="form" action="/devices/delete" method="POST" class="delete-device">
+                          <button type="submit" class="btn btn-default"><i class="fas fa-trash-alt" title="Delete "></i></button><input type="hidden" name="id" value="{{ $device.ID }}" />
+                        </form>
+                      </td>
+                    </tr>
+                    {{ end }}
+                  </tbody>
+                </table>
+
+                <div class="card-footer clearfix">
+                  {{/*<ul class="pagination pagination-sm m-0 float-right">
+                    <li class="page-item"><a class="page-link" href="#">&laquo;</a></li>
+                    <li class="page-item"><a class="page-link" href="#">1</a></li>
+                    <li class="page-item"><a class="page-link" href="#">2</a></li>
+                    <li class="page-item"><a class="page-link" href="#">3</a></li>
+                    <li class="page-item"><a class="page-link" href="#">&raquo;</a></li>
+                  </ul>*/}}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-12 col-xl-6">
+            <div class="card">
+              <div class="card-header">
+                <h3 class="card-title">Create Device</h3>
+              </div>
+              <form role="form" action="/devices/create" method="POST">
+                <div class="card-body">
+                  <div class="form-group">
+                    <label for="macaddress">MAC address</label>
+                    <input type="text" class="form-control" id="macaddress" placeholder="MAC address" name="macaddress" required pattern="([0-9A-Fa-f]{2}[:-]?){5}([0-9A-Fa-f]{2})">
+                  </div>
+                  <div class="form-group">
+                    <label for="devicegroups">Device Groups</label>
+                    <select class="select2" multiple="multiple" data-placeholder="Select one or more groups" style="width: 100%;" name="devicegroups[]">
+                      {{ range $group := $groups }}
+                      <option value="{{$group.ID}}">{{ $group.Name }}</option>
+                      {{ end }}
+                    </select>
+                  </div>
+                </div>
+
+                <div class="card-footer">
+                  <button type="submit" class="btn btn-primary"><i class="fas fa-add"></i>Add Device</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+{{ end }}
+
+{{ define "scripts_middle" }}
+<script src="/plugins/select2/js/select2.full.min.js"></script>
+{{ end }}
+
+{{ define "scripts_end" }}
+<script>
+  $(function () {
+    $('.devicegroups').change(function(ev) {
+      var form = $(ev.target.form);
+      $.post(form.attr('action'), form.serialize())
+    });
+    $('.delete-device').submit(function(ev) {
+      if (!confirm("Do you really want to delete this device?"))
+        ev.preventDefault();
+    })
+  });
+</script>
+{{ end }}
+
+{{ template "layout.html" . }}

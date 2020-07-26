@@ -31,6 +31,13 @@ func main() {
 	wait.Add(1)
 	radius.Start(&wait)
 
+	// Initialize the WebUI
+	webui := NewWebUI(db)
+
+	// Run the WebUI server
+	wait.Add(1)
+	webui.Start(&wait)
+
 	// Handle Ctrl-C
 	ctrlc := make(chan os.Signal)
 	signal.Notify(ctrlc, os.Interrupt, syscall.SIGTERM)
@@ -38,6 +45,7 @@ func main() {
 		<-ctrlc
 		// Print a blank line to the console so the ^C doesn't mess up the output
 		println("")
+		webui.Stop()
 		radius.Stop()
 	}()
 
