@@ -44,3 +44,10 @@ const (
 	// ClientPasswordModeSharedSecret will treat the password as a secondary shared secret that the RADIUS client will provide
 	ClientPasswordModeSharedSecret = 2
 )
+
+// User stores information about administrative users
+type User struct {
+	gorm.Model
+	Username string `gorm:"unique;not null"`
+	Password []byte `gorm:"not null"`
+}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"log"
@@ -14,8 +15,13 @@ import (
 	"html/template"
 
 	rice "github.com/GeertJohan/go.rice"
+	"github.com/andskur/argon2-hashing"
 	"github.com/jinzhu/gorm"
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
+
+	"github.com/gorilla/sessions"
+	"github.com/labstack/echo-contrib/session"
+	"github.com/wader/gormstore"
 )
 
 // WebUI runs the HTTP interface
@@ -33,6 +39,13 @@ func NewWebUI(db *gorm.DB) WebUI {
 	webui.Addr = ":8081"
 	webui.DB = db
 	return webui
+}
+
+// Toastr stores values to be passed to Toastr.js
+type Toastr struct {
+	Type    string
+	Message string
+	Title   string
 }
 
 // Start the WebUI server
@@ -53,6 +66,18 @@ func (wui *WebUI) Start(wait *sync.WaitGroup) {
 	// Set the HTTP error handler
 	wui.server.HTTPErrorHandler = wui.customHTTPErrorHandler
 
+	gob.Register(Toastr{})
+
+	// Set up session middleware
+	// TODO: Pull this secret from an environment variable or a configuration file/setting
+	store := gormstore.New(wui.DB, []byte("secret"))
+	store.SessionOpts = &sessions.Options{
+		Path:     "/",
+		MaxAge:   60 * 5,
+		HttpOnly: true,
+	}
+	wui.server.Use(session.Middleware(store))
+
 	// Static assets
 	uiAssets := http.FileServer(rice.MustFindBox("ui").HTTPBox())
 	wui.server.GET("/assets/*", echo.WrapHandler(uiAssets))
@@ -67,11 +92,11 @@ func (wui *WebUI) Start(wait *sync.WaitGroup) {
 	wui.server.GET("/logout", wui.logoutHandler)
 
 	// Device management
-	wui.server.GET("/devices", wui.devicesHandler)
-	wui.server.POST("/devices/:action", wui.devicesHandler)
+	wui.server.GET("/devices", wui.devicesHandler, RequireAuthentication)
+	wui.server.POST("/devices/:action", wui.devicesHandler, RequireAuthentication)
 
 	// Dashboard
-	wui.server.GET("/", wui.dashboardHandler)
+	wui.server.GET("/", wui.dashboardHandler, RequireAuthentication)
 
 	go func(wui *WebUI, wait *sync.WaitGroup) {
 		log.Printf("WEBUI: Starting server on %v", wui.Addr)
@@ -146,12 +171,31 @@ func (wui *WebUI) loadTemplates() (*template.Template, error) {
 
 // Render a template
 func (wui *WebUI) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
+	// If data is nil, make it a map
+	if data == nil {
+		data = map[string]interface{}{}
+	}
+
+	// Get session
+	sess, _ := session.Get("session", c)
+
 	// Add global methods if data is a map
 	if viewContext, isMap := data.(map[string]interface{}); isMap {
 		viewContext["reverse"] = c.Echo().Reverse
+		if username, ok := sess.Values["username"]; ok {
+			viewContext["username"] = username
+		} else {
+			viewContext["username"] = ""
+		}
+		viewContext["flashes"] = sess.Flashes
 	}
 
-	return wui.templates.ExecuteTemplate(w, name, data)
+	err := wui.templates.ExecuteTemplate(w, name, data)
+
+	// Save the session (needed to flush flashes if they've been read)
+	sess.Save(c.Request(), c.Response())
+
+	return err
 }
 
 func (wui *WebUI) customHTTPErrorHandler(err error, c echo.Context) {
@@ -165,17 +209,76 @@ func (wui *WebUI) customHTTPErrorHandler(err error, c echo.Context) {
 	}
 }
 
+// RequireAuthentication is a middleware that requires valid authentication, or else it redirects to the login page
+func RequireAuthentication(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		// TODO: Handle XHR requests differently
+		sess, _ := session.Get("session", c)
+		// Check that the username is set and has a non-zero length
+		if username, ok := sess.Values["username"].(string); ok && len(username) > 0 {
+			return next(c)
+		}
+
+		return c.Redirect(http.StatusFound, "/login")
+	}
+}
+
 func (wui *WebUI) loginHandler(c echo.Context) error {
+	sess, _ := session.Get("session", c)
 	if c.Request().Method == "POST" {
 		// TODO: Check the login information and create a session
-		return c.String(http.StatusOK, "Do the login thing")
+		username := c.FormValue("username")
+		password := c.FormValue("password")
+
+		// Attempt to find the user
+		var user User
+		wui.DB.Where("username = ?", username).First(&user)
+
+		var hasherr error
+
+		// User found
+		if user.ID > 0 {
+			// Compare the provided password and the hash in the database
+			hasherr = argon2.CompareHashAndPassword(user.Password, []byte(password))
+
+			// If no error, they match
+			if hasherr == nil {
+				// TODO: Store other session information for better security checks, such as the IP or user agent
+				sess.Values["username"] = user.Username
+				sess.Save(c.Request(), c.Response())
+				return c.Redirect(http.StatusSeeOther, "/")
+			}
+		}
+
+		// If we get this far, either the user was not found, the password didn't match, or there was an error processing the hash
+
+		// If there was a hash error other than a mismatch, throw a different error
+		if hasherr != nil && hasherr != argon2.ErrMismatchedHashAndPassword {
+			sess.AddFlash(Toastr{
+				Type:    "error",
+				Message: "There was an error processing the login.",
+			}, "_login")
+			log.Printf("WEBUI: There was an error when processing the login for %v: %v", username, hasherr)
+		} else {
+			sess.AddFlash(Toastr{
+				Type:    "error",
+				Message: "The username and password provided are not valid.",
+			}, "_login")
+		}
+		sess.Save(c.Request(), c.Response())
+		return c.Redirect(http.StatusSeeOther, "/login")
 	}
 
 	return c.Render(http.StatusOK, "login.html", nil)
 }
 
 func (wui *WebUI) logoutHandler(c echo.Context) error {
-	// TODO: Invalidate/clear the session
+	// Clear the user session data
+	sess, _ := session.Get("session", c)
+	delete(sess.Values, "username")
+	sess.Save(c.Request(), c.Response())
+
+	// Redirect back to the login page
 	return c.Redirect(http.StatusFound, "/login")
 }
 
