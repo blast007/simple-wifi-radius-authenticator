@@ -7,7 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
@@ -29,8 +29,10 @@ type WebUI struct {
 	Addr string
 	DB   *gorm.DB
 
-	server    *echo.Echo
-	templates *template.Template
+	server        *echo.Echo
+	templates     map[string]*template.Template
+	templateFuncs template.FuncMap
+	templateBox   *rice.Box
 }
 
 // NewWebUI creates a new instance of WebUI
@@ -53,12 +55,28 @@ func (wui *WebUI) Start(wait *sync.WaitGroup) {
 	wui.server = echo.New()
 	wui.server.HideBanner = true
 
-	// Load the templates
-	var err error
-	wui.templates, err = wui.loadTemplates()
-	if err != nil {
-		panic(err)
+	// Define common template functions
+	wui.templateFuncs = template.FuncMap{
+		"deviceContainsGroup": func(device Device, group DeviceGroup) bool {
+			for _, devicegroup := range device.DeviceGroups {
+				if devicegroup.ID == group.ID {
+					return true
+				}
+			}
+
+			return false
+		},
+		"prettyPrintMACAddress": prettyPrintMACAddress,
 	}
+
+	// Get the template box
+	wui.templateBox = rice.MustFindBox("ui/templates")
+
+	// Pre-load a few templates
+	wui.templates = map[string]*template.Template{}
+	wui.loadTemplate("login.html")
+	wui.loadTemplate("dashboard.html")
+	wui.loadTemplate("devices.html")
 
 	// Set the template renderer
 	wui.server.Renderer = wui
@@ -119,54 +137,57 @@ func (wui *WebUI) Stop() error {
 	return wui.server.Shutdown(ctx)
 }
 
-func (wui *WebUI) loadTemplates() (*template.Template, error) {
-	funcs := template.FuncMap{
-		"deviceContainsGroup": func(device Device, group DeviceGroup) bool {
-			for _, devicegroup := range device.DeviceGroups {
-				if devicegroup.ID == group.ID {
-					return true
-				}
+func (wui *WebUI) loadTemplate(path string) {
+	log.Println("WEBUI: Loading template:", path)
+
+	var t *template.Template
+
+	// Attempt to load the contents of the template
+	if templateString, err := wui.templateBox.String(path); err != nil {
+		log.Panicln("Unable to load template:", path, err)
+	} else {
+		// Parse the base template and inject additional functions
+		t, err = template.New("").Funcs(wui.templateFuncs).Parse(templateString)
+		if err != nil {
+			log.Panicln("Unable to parse template:", path, err)
+		}
+	}
+
+	// Load any dependencies
+	t = wui.loadTemplateDependencies(t, path, 0)
+
+	// Store the template
+	wui.templates[path] = t
+}
+
+func (wui *WebUI) loadTemplateDependencies(t *template.Template, path string, depth int) *template.Template {
+	if depth >= 10 {
+		log.Panicln("WEBUI: loadTemplateDependencies maximum recursion depth reached")
+	}
+
+	if templateString, err := wui.templateBox.String(path); err != nil {
+		log.Panicln("Unable to load template dependency:", path, err)
+	} else {
+		// If we're at a depth deeper than 0, we'll load the template
+		if depth > 0 {
+			log.Println("WEBUI: Loading template dependency:", path)
+
+			// Parse the dependency
+			t, err = t.New(path).Parse(templateString)
+			if err != nil {
+				log.Panicln("Unable to parse template dependency:", path, err)
 			}
-
-			return false
-		},
-		"prettyPrintMACAddress": prettyPrintMACAddress,
-	}
-	t := template.New("")
-
-	templates := rice.MustFindBox("ui/templates")
-	if templates.Walk("/", func(path string, info os.FileInfo, walkErr error) error {
-		// In case of error accessing a file, return it so we don't panic
-		if walkErr != nil {
-			log.Println("WEBUI: loadTemplates() - Error accessing", path)
-			return walkErr
-		}
-		// Skip directories
-		if info.IsDir() {
-			return nil
 		}
 
-		// Read the contents of the template
-		contents, err := templates.String(path)
-		if err != nil {
-			log.Println("WEBUI: loadTemplates() - Error reading", path)
-			return err
+		// Look for template tags and extract the file paths
+		var re = regexp.MustCompile(`{{[[:space:]]*template[[:space:]]*"(.+\.html)"[[:space:]]*.+[[:space:]]*}}`)
+		for _, match := range re.FindAllStringSubmatch(templateString, -1) {
+			// Recursively load dependencies
+			t = wui.loadTemplateDependencies(t, match[1], depth+1)
 		}
-
-		// Parse the template
-		// TODO: See if we can parse this as a file instead of a string
-		t, err = t.New(path).Funcs(funcs).Parse(contents)
-		if err != nil {
-			log.Println("WEBUI: loadTemplates() - Error parsing", path)
-			return err
-		}
-
-		return nil
-	}) != nil {
-		panic("WEBUI: loadTemplates() - Error loading the template files")
 	}
 
-	return t, nil
+	return t
 }
 
 // Render a template
@@ -190,7 +211,12 @@ func (wui *WebUI) Render(w io.Writer, name string, data interface{}, c echo.Cont
 		viewContext["flashes"] = sess.Flashes
 	}
 
-	err := wui.templates.ExecuteTemplate(w, name, data)
+	if _, loaded := wui.templates[name]; !loaded {
+		wui.loadTemplate(name)
+	}
+
+	// Execute the template
+	err := wui.templates[name].Execute(w, data)
 
 	// Save the session (needed to flush flashes if they've been read)
 	sess.Save(c.Request(), c.Response())
