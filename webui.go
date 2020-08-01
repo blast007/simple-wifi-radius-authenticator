@@ -238,10 +238,22 @@ func (wui *WebUI) customHTTPErrorHandler(err error, c echo.Context) {
 	if he, ok := err.(*echo.HTTPError); ok {
 		code = he.Code
 	}
-	errorPage := fmt.Sprintf("%d.html", code)
-	if err := c.Render(code, errorPage, nil); err != nil {
-		wui.server.DefaultHTTPErrorHandler(err, c)
+
+	// Only show custom error pages to logged in users
+	sess, _ := session.Get("session", c)
+	if username, ok := sess.Values["username"].(string); ok && len(username) > 0 {
+		errorPage := fmt.Sprintf("%d.html", code)
+		// Check if we have a custom error page for this code
+		if _, err := wui.templateBox.Open(errorPage); err == nil {
+			// Attempt to render the custom error page
+			if err := c.Render(code, errorPage, nil); err == nil {
+				return
+			}
+		}
 	}
+
+	// Fall back to the default Echo HTTP error handler
+	wui.server.DefaultHTTPErrorHandler(err, c)
 }
 
 // RequireAuthentication is a middleware that requires valid authentication, or else it redirects to the login page
