@@ -358,17 +358,13 @@ func (wui *WebUI) devicesHandler(c echo.Context) error {
 		wui.DB.Find(&groups)
 
 		// Get the full list of MAC addresses and preload their associated device groups
-		var macs []Device
-		wui.DB.Preload("DeviceGroups").Find(&macs)
+		var devices []Device
+		wui.DB.Preload("DeviceGroups").Find(&devices)
 
-		err := c.Render(http.StatusOK, "devices.html", struct {
-			Title   string
-			Groups  []DeviceGroup
-			Devices []Device
-		}{
-			"Device Management",
-			groups,
-			macs,
+		err := c.Render(http.StatusOK, "devices.html", map[string]interface{}{
+			"Title":   "Device Management",
+			"Groups":  groups,
+			"Devices": devices,
 		})
 
 		if err != nil {
