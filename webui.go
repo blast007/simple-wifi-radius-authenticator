@@ -29,7 +29,9 @@ type WebUI struct {
 	Addr string
 	DB   *gorm.DB
 
-	server        *echo.Echo
+	server         *echo.Echo
+	sessionCleanup chan struct{}
+
 	templates     map[string]*template.Template
 	templateFuncs template.FuncMap
 	templateBox   *rice.Box
@@ -96,6 +98,10 @@ func (wui *WebUI) Start(wait *sync.WaitGroup) {
 	}
 	wui.server.Use(session.Middleware(store))
 
+	// Set up periodic cleanup of stale sessions
+	wui.sessionCleanup = make(chan struct{})
+	go store.PeriodicCleanup(1*time.Hour, wui.sessionCleanup)
+
 	// Static assets
 	uiAssets := http.FileServer(rice.MustFindBox("ui").HTTPBox())
 	wui.server.GET("/assets/*", echo.WrapHandler(uiAssets))
@@ -131,6 +137,9 @@ func (wui *WebUI) Start(wait *sync.WaitGroup) {
 
 // Stop the WebUI server
 func (wui *WebUI) Stop() error {
+	// Stop the session cleanup
+	close(wui.sessionCleanup)
+
 	// Wait up to 5 seconds for existing requests to complete
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
