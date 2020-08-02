@@ -83,8 +83,7 @@ func (rs *RadiusServer) radiusHandler(w radius.ResponseWriter, r *radius.Request
 	// Look up the record
 	default:
 		var device Device
-		rs.DB.Preload("DeviceGroups").Preload("DeviceGroups.Networks").First(&device, "MAC = ?", mac)
-		if device.ID > 0 {
+		if !rs.DB.Preload("DeviceGroups").Preload("DeviceGroups.Networks").First(&device, "MAC = ?", mac).RecordNotFound() {
 			// Verify the requested SSID is allowed
 			for _, group := range device.DeviceGroups {
 				for _, network := range group.Networks {

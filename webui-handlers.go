@@ -24,12 +24,8 @@ func (wui *WebUI) loginSubmitHandler(c echo.Context) error {
 
 	// Attempt to find the user
 	var user User
-	wui.DB.Where("username = ?", username).First(&user)
-
 	var hasherr error
-
-	// User found
-	if user.ID > 0 {
+	if !wui.DB.Where("username = ?", username).First(&user).RecordNotFound() {
 		// Compare the provided password and the hash in the database
 		hasherr = argon2.CompareHashAndPassword(user.Password, []byte(password))
 
