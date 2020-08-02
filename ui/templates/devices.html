@@ -1,4 +1,5 @@
 {{ define "body" }}
+{{ $groups := .Groups }}
       <div class="container-fluid">
         <div class="row">
           <div class="col-lg-12 col-xl-6">
@@ -16,13 +17,12 @@
                     </tr>
                   </thead>
                   <tbody>
-                    {{ $groups := .Groups }}
                     {{ range $device := .Devices }}
                     <tr>
                       <td>{{ prettyPrintMACAddress $device.MAC }}</td>
                       <td>
                         <form role="form" action="/devices/update" method="POST">
-                          <select class="select2 devicegroups" multiple="multiple" data-placeholder="Select one or more groups" style="width: 100%;" name="devicegroups[]">
+                          <select class="submit-on-change" multiple="multiple" data-placeholder="Select groups" style="width: 100%;" name="devicegroups[]">
                             {{ range $group := $groups }}
                             {{ if deviceContainsGroup $device $group }}
                             <option value="{{$group.ID}}" selected>{{ $group.Name }}</option>
@@ -34,7 +34,7 @@
                         </form>
                       </td>
                       <td>
-                        <form role="form" action="/devices/delete" method="POST" class="delete-device">
+                        <form role="form" action="/devices/delete" method="POST" class="confirm-delete" data-type="device" data-name="{{ prettyPrintMACAddress $device.MAC }}">
                           <button type="submit" class="btn btn-default"><i class="fas fa-trash-alt" title="Delete "></i></button><input type="hidden" name="id" value="{{ $device.ID }}" />
                         </form>
                       </td>
@@ -64,11 +64,11 @@
                 <div class="card-body">
                   <div class="form-group">
                     <label for="macaddress">MAC address</label>
-                    <input type="text" class="form-control" id="macaddress" placeholder="MAC address" name="macaddress" required pattern="([0-9A-Fa-f]{2}[:-]?){5}([0-9A-Fa-f]{2})">
+                    <input type="text" class="form-control mac-input" id="macaddress" placeholder="12:34:56:78:90:AB" name="macaddress" required pattern="([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}">
                   </div>
                   <div class="form-group">
                     <label for="devicegroups">Device Groups</label>
-                    <select class="select2" multiple="multiple" data-placeholder="Select one or more groups" style="width: 100%;" name="devicegroups[]">
+                    <select multiple="multiple" data-placeholder="Select groups" style="width: 100%;" name="devicegroups[]">
                       {{ range $group := $groups }}
                       <option value="{{$group.ID}}">{{ $group.Name }}</option>
                       {{ end }}
@@ -86,23 +86,9 @@
       </div>
 {{ end }}
 
-{{ define "scripts_middle" }}
+{{ define "extra_scripts" }}
 <script src="/plugins/select2/js/select2.full.min.js"></script>
-{{ end }}
-
-{{ define "scripts_end" }}
-<script>
-  $(function () {
-    $('.devicegroups').change(function(ev) {
-      var form = $(ev.target.form);
-      $.post(form.attr('action'), form.serialize())
-    });
-    $('.delete-device').submit(function(ev) {
-      if (!confirm("Do you really want to delete this device?"))
-        ev.preventDefault();
-    })
-  });
-</script>
+<script src="/assets/js/cleave.min.js"></script>
 {{ end }}
 
 {{ template "layout.html" . }}

@@ -21,20 +21,22 @@
         <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
       </li>
       <li class="nav-item d-none d-sm-inline-block">
-        <a href="/" class="nav-link">Dashboard</a>
+        <a href="{{ call .reverse "dashboard" }}" class="nav-link">Dashboard</a>
       </li>
     </ul>
 
     <ul class="navbar-nav ml-auto">
+      {{ if .username }}
       <li class="nav-item d-none d-sm-inline-block">
         <span class="navbar-text">
-          Signed in as <b>admin</b>
+          Signed in as <b>{{ .username }}</b>
         </span>
       </li>
       <li class="nav-item d-none d-sm-inline-block">
-        <a class="nav-link" href="/logout"><i
+        <a class="nav-link" href="{{ call .reverse "logout" }}"><i
         class="fas fa-sign-out-alt" title="Logout"></i></a>
       </li>
+      {{ end }}
       <li class="nav-item">
         <a class="nav-link" data-widget="control-sidebar" data-slide="true" role="button" style="cursor: pointer"><i
         class="fas fa-question" title="Help"></i></a>
@@ -61,7 +63,7 @@
             </a>
             <ul class="nav nav-treeview">
               <li class="nav-item">
-                <a href="/devices" class="nav-link active">
+                <a href="{{ call .reverse "devices" }}" class="nav-link active">
                   <i class="nav-icon fas fa-mobile-alt"></i>
                   <p>
                     Devices
@@ -154,15 +156,9 @@
 <script src="/plugins/jquery/jquery.min.js"></script>
 <script src="/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="/plugins/toastr/toastr.min.js"></script>
-{{template "scripts_middle" .}}
 <script src="/assets/js/adminlte.min.js"></script>
-<script>
-$(function () {
-//Initialize Select2 Elements
-$('.select2').select2()
-})
-</script>
-{{template "scripts_end" .}}
+{{template "extra_scripts" .}}
+<script src="/assets/js/swra.js"></script>
 <script>
   toastr.options.positionClass = "toast-top-center";
 {{ range $flash := call .flashes }}
