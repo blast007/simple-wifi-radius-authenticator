@@ -110,7 +110,7 @@ func (wui *WebUI) deviceCreateHandler(c echo.Context) error {
 
 	// Return an error if the MAC address is not valid
 	if !isValidMACFormat(device.MAC) {
-		return c.String(http.StatusOK, "Invalid MAC address format provided")
+		return c.String(http.StatusOK, "WEBUI: Invalid MAC address format provided")
 	}
 
 	// For each group, convert the string ID to an unsigned int, fetch the record, and add it
@@ -127,16 +127,80 @@ func (wui *WebUI) deviceCreateHandler(c echo.Context) error {
 		return c.String(http.StatusOK, fmt.Sprintf("Error creating entry: %v", err))
 	}
 
-	log.Printf("WEBUI: Added Device record for %s", device.MAC)
+	log.Printf("WEBUI: Added Device record for %s", prettyPrintMACAddress(device.MAC))
 	return c.Redirect(http.StatusSeeOther, c.Echo().Reverse("devices"))
 }
 
 func (wui *WebUI) deviceUpdateHandler(c echo.Context) error {
-	return c.String(http.StatusOK, fmt.Sprintf("Update %s", c.FormValue("id")))
+	var id = c.FormValue("id")
+	var device Device
+	var response Toastr
+
+	// Fetch the record and handle if it doesn't exist
+	if wui.DB.First(&device, id).RecordNotFound() {
+		response = Toastr{
+			Message: fmt.Sprintf("Device with ID of %v was not found.", id),
+			Type:    "error",
+		}
+	} else {
+		// For each group, convert the string ID to an unsigned int, fetch the record, and add it
+		for _, groupIDString := range c.Request().Form["devicegroups[]"] {
+			var group DeviceGroup
+			if groupID, err := strconv.ParseUint(groupIDString, 10, 64); err == nil {
+				wui.DB.Find(&group, groupID)
+				device.DeviceGroups = append(device.DeviceGroups, group)
+			}
+		}
+
+		// Save the record
+		if err := wui.DB.Save(&device).Error; err != nil {
+			response = Toastr{
+				Message: fmt.Sprintf("Error updating device %v.", prettyPrintMACAddress(device.MAC)),
+				Type:    "error",
+			}
+			log.Println("WEBUI: Error updating device", prettyPrintMACAddress(device.MAC), err)
+		} else {
+			response = Toastr{
+				Message: fmt.Sprintf("Device %v has been updated.", prettyPrintMACAddress(device.MAC)),
+				Type:    "success",
+			}
+		}
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 func (wui *WebUI) deviceDeleteHandler(c echo.Context) error {
-	return c.String(http.StatusOK, fmt.Sprintf("Delete %s", c.FormValue("id")))
+	var id = c.FormValue("id")
+	var device Device
+	var response Toastr
+
+	// Fetch the record and handle if it doesn't exist
+	if wui.DB.First(&device, id).RecordNotFound() {
+		response = Toastr{
+			Message: fmt.Sprintf("Device with ID of %v was not found.", id),
+			Type:    "error",
+		}
+	} else {
+		if err := wui.DB.Delete(&device).Error; err != nil {
+			response = Toastr{
+				Message: fmt.Sprintf("Error deleting device %v.", prettyPrintMACAddress(device.MAC)),
+				Type:    "error",
+			}
+			log.Println("WEBUI: Error deleting device", prettyPrintMACAddress(device.MAC), err)
+		} else {
+			response = Toastr{
+				Message: fmt.Sprintf("Device %v has been deleted.", prettyPrintMACAddress(device.MAC)),
+				Type:    "success",
+			}
+		}
+	}
+
+	sess, _ := session.Get("session", c)
+	sess.AddFlash(response)
+	sess.Save(c.Request(), c.Response())
+
+	return c.Redirect(http.StatusSeeOther, c.Echo().Reverse("devices"))
 }
 
 /******************\
@@ -191,9 +255,73 @@ func (wui *WebUI) groupCreateHandler(c echo.Context) error {
 }
 
 func (wui *WebUI) groupUpdateHandler(c echo.Context) error {
-	return c.String(http.StatusOK, fmt.Sprintf("Update group %s", c.FormValue("id")))
+	var id = c.FormValue("id")
+	var group DeviceGroup
+	var response Toastr
+
+	// Fetch the record and handle if it doesn't exist
+	if wui.DB.First(&group, id).RecordNotFound() {
+		response = Toastr{
+			Message: fmt.Sprintf("Group with ID of %v was not found.", id),
+			Type:    "error",
+		}
+	} else {
+		// For each network, convert the string ID to an unsigned int, fetch the record, and add it
+		for _, networkIDString := range c.Request().Form["networks[]"] {
+			var network Network
+			if networkID, err := strconv.ParseUint(networkIDString, 10, 64); err == nil {
+				wui.DB.Find(&network, networkID)
+				group.Networks = append(group.Networks, network)
+			}
+		}
+
+		// Save the record
+		if err := wui.DB.Save(&group).Error; err != nil {
+			response = Toastr{
+				Message: fmt.Sprintf("Error updating group %v.", group.Name),
+				Type:    "error",
+			}
+			log.Println("WEBUI: Error updating group", group.Name, err)
+		} else {
+			response = Toastr{
+				Message: fmt.Sprintf("Group %v has been updated.", group.Name),
+				Type:    "success",
+			}
+		}
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 func (wui *WebUI) groupDeleteHandler(c echo.Context) error {
-	return c.String(http.StatusOK, fmt.Sprintf("Delete group %s", c.FormValue("id")))
+	var id = c.FormValue("id")
+	var group DeviceGroup
+	var response Toastr
+
+	// Fetch the record and handle if it doesn't exist
+	if wui.DB.First(&group, id).RecordNotFound() {
+		response = Toastr{
+			Message: fmt.Sprintf("Group with ID of %v was not found.", id),
+			Type:    "error",
+		}
+	} else {
+		if err := wui.DB.Delete(&group).Error; err != nil {
+			response = Toastr{
+				Message: fmt.Sprintf("Error deleting group %v.", group.Name),
+				Type:    "error",
+			}
+			log.Println("WEBUI: Error deleting group", group.Name, err)
+		} else {
+			response = Toastr{
+				Message: fmt.Sprintf("Group %v has been deleted.", group.Name),
+				Type:    "success",
+			}
+		}
+	}
+
+	sess, _ := session.Get("session", c)
+	sess.AddFlash(response)
+	sess.Save(c.Request(), c.Response())
+
+	return c.Redirect(http.StatusSeeOther, c.Echo().Reverse("groups"))
 }

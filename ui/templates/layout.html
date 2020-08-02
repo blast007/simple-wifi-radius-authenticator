@@ -161,6 +161,7 @@
 <script src="/assets/js/swra.js"></script>
 <script>
   toastr.options.positionClass = "toast-top-center";
+  toastr.options.preventDuplicates = true;
 {{ range $flash := call .flashes }}
   toastr["{{ $flash.Type }}"]("{{ $flash.Message }}", "{{ $flash.Title }}");
 {{ end }}

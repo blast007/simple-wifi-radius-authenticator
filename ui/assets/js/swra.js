@@ -15,7 +15,9 @@ $(function () {
     // Submit a form via XHR when a value of an input changes
     $('.submit-on-change').change(function(ev) {
         var form = $(ev.target.form);
-        $.post(form.attr('action'), form.serialize())
+        $.post(form.attr('action'), form.serialize(), function(data) {
+            toastr[data.Type](data.Message, data.Title);
+        }, 'json')
     });
 
     // Confirm deletion before submitting form
