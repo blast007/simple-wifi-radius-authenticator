@@ -10,7 +10,6 @@ import (
 	"layeh.com/radius/rfc2865"
 
 	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
 
 // RadiusServer runs the RADIUS server
