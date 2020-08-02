@@ -66,6 +66,15 @@ func (wui *WebUI) Start(wait *sync.WaitGroup) {
 
 			return false
 		},
+		"groupContainsNetwork": func(group DeviceGroup, network Network) bool {
+			for _, groupnetwork := range group.Networks {
+				if groupnetwork.ID == network.ID {
+					return true
+				}
+			}
+
+			return false
+		},
 		"prettyPrintMACAddress": prettyPrintMACAddress,
 	}
 
@@ -119,6 +128,13 @@ func (wui *WebUI) Start(wait *sync.WaitGroup) {
 	routeDevices.POST("/create", wui.deviceCreateHandler).Name = "device-create"
 	routeDevices.POST("/update", wui.deviceUpdateHandler).Name = "device-update"
 	routeDevices.POST("/delete", wui.deviceDeleteHandler).Name = "device-delete"
+
+	// Group management
+	routeGroups := wui.server.Group("/groups", RequireAuthentication)
+	routeGroups.GET("/", wui.groupsHandler).Name = "groups"
+	routeGroups.POST("/create", wui.groupCreateHandler).Name = "group-create"
+	routeGroups.POST("/update", wui.groupUpdateHandler).Name = "group-update"
+	routeGroups.POST("/delete", wui.groupDeleteHandler).Name = "group-delete"
 
 	// Dashboard
 	wui.server.GET("/", wui.dashboardHandler, RequireAuthentication).Name = "dashboard"

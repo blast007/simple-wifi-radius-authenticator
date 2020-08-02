@@ -4,7 +4,7 @@ $(function () {
         $('select[multiple]').select2();
 
     // Cleave input formatting
-    if (Cleave) {
+    if (typeof(Cleave) != 'undefined') {
         new Cleave('.mac-input', {
             delimiter: ':',
             blocks: new Array(6).fill(2),
